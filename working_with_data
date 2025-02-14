@@ -1,0 +1,328 @@
+#' ----------------------------------
+#' Working with data part 1
+#' 
+#' @author Dan Levesque
+#' @date 2025-02-13
+#' ----------------------------------
+
+##
+# Load some libraries
+##
+
+#library(tidyverse)
+library(readr) # a library for reading in text files
+library(dplyr) # data manipulation
+library(tidyr) # data reshaping
+
+##
+# set a working directory
+##
+# set wd using the function here from the library here
+setwd(here::here())
+
+# where am i?
+getwd()
+list.files()
+
+
+##
+# Load data
+##
+
+# what is in data?
+list.files("data")
+
+
+surveys <- read_csv("data/surveys_complete_77_89.csv")
+
+
+##
+# Investigate my data
+##
+
+# what's my class
+class(surveys)
+
+surveys
+as.data.frame(surveys)
+
+# check the classes of columns
+str(surveys)
+
+# use visdat to look at my data
+#install.packages("visdat")
+visdat::vis_dat(surveys)
+skimr::skim(surveys)
+
+
+##
+# Manipulate our data
+##
+
+## Select is for columns
+names(surveys)
+
+survey_small <- 
+  select(surveys, #start with data
+         plot_id, species_id, hindfoot_length) #cols
+
+survey_small
+
+# use select for getting rid of columns
+survey_smaller <- 
+  select(surveys,
+         -record_id, -year)
+
+survey_smaller
+
+# range of columns
+select(surveys, sex : genus)
+
+# boolean to get columns by type
+select(surveys,
+       where(is.numeric))
+
+# which columns have NAs
+select(surveys,
+       where(anyNA))
+
+
+## filter down to certain rows
+filter(surveys, year == 1985)
+
+# filter to characters
+unique(surveys$species_id)
+
+# get just those rows with RM or DO as species_id
+filter(surveys, species_id %in% c("RM", "DO"))
+
+# my FAVORITE filter
+filter(surveys, !is.na(hindfoot_length))
+
+
+# Combine filters
+# year less than or equal to 1988 AND hindfoot length
+# is not NA
+filter(surveys,
+       year <= 1988 & !is.na(hindfoot_length))
+
+# OR is | 
+
+
+### CHALLENGE FOR YOU!
+# 1. Use surveys and make a data frame that has ONLY data
+# from 1980 - 1985
+#
+filter(surveys,
+       year >= 1980 &
+         year <= 1985)
+
+# 2. Use surveys and make a data frame with columns
+# in the follow order - and only these cols:
+# year, month, species_id, plot_id
+select(surveys,
+       year, month, species_id, plot_id)
+
+
+##
+# Combining select AND filter
+##
+
+
+# remove the days column and filter to month >=
+# Intermediate objects (or overwriting)
+surveys_fs <- select(surveys, -day)
+surveys_fs <- filter(surveys_fs, month >= 7)
+
+
+# create an object that is surveys without the day col
+surveys_fs <- select(surveys, -day)
+
+# subset that object to have month >= 7
+surveys_fs <- filter(surveys_fs, month >= 7)
+
+## In one step with NESTED function
+surveys_fs <- filter(
+  select(surveys, -day),
+  month >= 7
+)
+
+## ENTER THE PIPE
+
+# The PIPE
+# %>% - the OG pipe in R from mgrittr
+# |> the base pipe
+# %>% - the base pipe - shift-ctrl-m
+
+1 %>%  sum(2)
+1 %>%  sum(2) %>% sum(5) %>% sum(10)
+
+# combine select and filter with pipes
+
+# make a new object, surveys_fs
+surveys_fs %>% 
+  
+  # by starting with my surveys data
+  surveys %>%
+  
+  # remove the day column
+  select(-day) %>% 
+  
+  #subset to month >= 7
+  filter(month >= 7)
+
+##
+# shiny to build interactive website
+##
+  
+##
+# Exercise
+# Using surveys, make a data frame with ONLY the record_id,
+# month, and species_id columns with ONLY the year 1988-
+# USE PIPES! 
+
+# take surveys
+surveys %>% 
+  # filter to 1988
+  filter(year == 1988) %>% 
+  # get just the record_id, month, and species_id cols
+  select(record_id, month, species_id)
+  
+##
+# Mutate
+##
+
+# We want kg instead of g
+
+# take our data
+# create a new column where weight_kg = weight/1000
+
+# make a new object
+surveys_weights <-
+  # take our data
+  surveys %>% 
+  # create a new column where weight_kg = weight/1000
+  mutate(weight_kg = weight/1000,
+         # add weight_lbs
+         weight_lbs = weight_kg * 2.2)
+
+View(surveys_weights)
+
+# how can we make a date column?
+# take surveys
+surveys %>% 
+# make a new column where we combine year, month
+# and day separated by -
+  mutate(date = paste(year, month, day, sep = "-"),
+         # make this into a date object with
+         # lubridate::ymd()
+         date = lubridate::ymd(date)) %>% 
+# move the date column to be right after record_id
+  relocate(date, .after = record_id)
+
+# another way to do the same thing
+surveys %>% 
+  mutate(date = 
+           paste(year, month, day, sep = "-") %>% 
+           lubridate::ymd()) %>% 
+  relocate(date, .after = record_id)
+
+
+## Exercise
+# Load ggplot2 - build a pipeline that
+# creates a date column and then plots
+# weight in kg across dates using geom_jitter()
+library(ggplot2)
+
+surveys_2 <- surveys %>% 
+  mutate(date = paste(day, month, year, sep = "_"),
+         date = lubridate::dmy(date)) %>% 
+  relocate(date, .after = record_id)
+
+ggplot(surveys_2, aes(x = date, y = weight_kg)) +
+  geom_jitter(width = 0.2, height = 0, color = "lightgreen", alpha = 0.7) +
+  labs(title = "Weight in kg Across Dates",
+       x = "Date",
+       y = "Weight (kg)") +
+  theme_minimal()
+
+# start with our data
+surveys %>% 
+# create a date column using y, m, d, and lubridate
+  mutate(date = 
+           paste(year, month, day, sep = "-"),
+           date = lubridate::ymd(date), 
+        # create a weight_kg column
+        weight_kg = weight/1000
+  ) %>% 
+# send that to ggplot
+  # where x is date ad y is weight_kg
+  ggplot(mapping = aes(x = date, y = weight_kg)) +
+# make a jitter plot
+  geom_jitter(alpha = 0.1)
+
+##
+# group_by and summarize
+##
+
+# I want the average weight by sex
+
+
+# take the data
+surveys %>% 
+  # make groups by sex - split it
+  group_by(sex) %>% 
+  # get the average weight per group
+  summarize(mean_weight = mean(weight, na.rm = TRUE),
+            
+        sample_size = n())
+
+
+# multiple groups - let's get the mean
+# by species and sex
+surveys %>% 
+  group_by(species_id, sex) %>% 
+  summarize(mean_weight = mean(weight, na.rm = TRUE)) %>% 
+  ungroup()
+
+## Challenge
+# Take the data and plot average weight of 
+# each species over time (using date!)
+# Be careful - you want to get rid of NA weights
+
+#take my data
+surveys %>% 
+  # make date column
+  mutate(date = 
+           paste(year, month, day, sep = "-"),
+         date = lubridate::ymd(date)) %>% 
+  # remove NA data
+  filter(!is.na(weight), !is.na(species)) %>% 
+  # make groups by species - split it
+  group_by(species, date) %>% 
+  # get the average weight per group
+  summarize(mean_weight = mean(weight, na.rm = TRUE)) %>% 
+  # plot with ggplot
+  ggplot(aes(x = date, y = mean_weight, color = species)) +
+  geom_line() +
+  geom_point(alpha = 0.5) +
+  labs(title = "Avg Wt of Each Spcs Over Time",
+       x = "Date",
+       y = "Mean Weight (kg)",
+       color = "Species") +
+  theme_minimal()
+
+# pull takes a column and makes it a vector
+           
+##
+# Arrange and ungrouping
+##
+surveys %>% 
+  group_by(species_id, sex) %>% 
+  summarize(mean_weight = mean(weight, na.rm = TRUE)) %>% 
+  # remove NAN
+  filter(!is.na(mean_weight)) %>% 
+  ungroup() %>% 
+  # arrange our data
+  arrange(desc(mean_weight))
+
